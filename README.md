@@ -1,0 +1,1 @@
+Supplementary data and codes to generate the figures shown in Rowan et al., 2026 "Contrasting ages and dynamics of unsaturated zone carbon pools at a mid-latitude karst system". Please cite the original paper when using the data and code.
