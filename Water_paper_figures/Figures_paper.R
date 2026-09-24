@@ -11,6 +11,7 @@ library(tidyr)
 library(broom)
 
 
+########### Data Loading ###########
 
 # Load data trace elements 
 te <- read.csv("data/Rowan_2026_Trace_elements.csv")
@@ -46,51 +47,9 @@ river$month_date <- dmy(river$Date)  # parses date format automatically
 
 
 
-########### Carbon and hydrology time series ######
+########### CARBON AND HYDROLOGY TIME SERIES ######
 
-# Supplementary figure 1 with all the sites individually
-sfig1_toc <- ggplot(data = toc %>% filter(Group != 'Soil'), aes(x = as.Date(month_date), y = Corrected.TOC.mg.L, 
-                                                               colour = Site.ID, shape= Group), size=3)+
-                  geom_point()+
-                  geom_line(data = toc%>% filter(Group != 'Soil'), aes(x = as.Date(month_date), y = Corrected.TOC.mg.L, 
-                                                                colour = Site.ID))+
-                  xlab("Collection date") + ylab("TOC (mg/L)") +
-                  theme(legend.position="none") + scale_colour_scico_d(name = 'Site ID', alpha = 1,
-                                                begin = 0, end = 1, direction = 1,palette = "batlow") +
-                  theme_bw() 
-
-sfig1_doc <- ggplot(data = doc, aes(x = as.Date(month_date), y = F14C, colour = Site.ID, shape= Group), size=3)+
-                  geom_point()+
-                  geom_line(data = doc, aes(x = as.Date(month_date), y = F14C, colour = Site.ID))+
-                  xlab("Collection date") + ylab("DOC F14C") +
-                  theme(legend.position="none") + scale_colour_scico_d(name = 'Site ID', alpha = 1,
-                                                begin = 0, end = 1, direction = 1,palette = "batlow") +
-                  theme_bw()  
-
-sfig1_dic <- ggplot(data = dic, aes(x = as.Date(month_date), y = F14C, colour = Site.ID, shape= Group), size=3)+
-                  geom_point()+
-                  geom_line(data = dic, aes(x = as.Date(month_date), y = F14C, colour = Site.ID))+
-                  xlab("Collection date") + ylab("DIC F14C") +
-                  theme(legend.position="none") + scale_colour_scico_d(name = 'Site ID', alpha = 1,
-                                                begin = 0, end = 1, direction = 1,palette = "batlow") +
-                  theme_bw()  
-
-# Arrange in one plot 
-ggpubr::ggarrange(sfig1_toc, sfig1_doc, sfig1_dic,  
-                  ncol=1, nrow = 3, heights = c(1,1), widths = c(1,1), 
-                  common.legend = TRUE, legend = "bottom", align = "v") 
-
-# Save plot as png
-ggsave(filename = file.path("output","SupplFig1_C-timeseries.png"), width = 15, height = 20, units = "cm")
-
-#Calculate average for each drip
-drip_avg_doc14C <- doc %>% 
-                      filter(F14C != 'is.na') %>% 
-                      group_by(Site.ID) %>% 
-                      summarise(avg = mean(F14C))
-
-
-# Figure 3 sites and averages over time
+###########  Figure 3 sites and averages over time ########### 
 # Calculate monthly mean of each group of samples and plot
 toc_avg <- toc %>% 
   filter(Corrected.TOC.mg.L != 'is.na') %>% 
@@ -225,148 +184,48 @@ ggpubr::ggarrange(fig3_toc, fig3_doc_dic, fig3_te, fig3_prec, fig3_disc,
 ggsave(filename = file.path("output","Fig3_timeseries.pdf"), width = 12, height = 30, units = "cm")
 
 
+########### Supplementary Figure 1 with all the sites individually ########### 
+sfig1_toc <- ggplot(data = toc %>% filter(Group != 'Soil'), aes(x = as.Date(month_date), y = Corrected.TOC.mg.L, 
+                                                                colour = Site.ID, shape= Group), size=3)+
+  geom_point()+
+  geom_line(data = toc%>% filter(Group != 'Soil'), aes(x = as.Date(month_date), y = Corrected.TOC.mg.L, 
+                                                       colour = Site.ID))+
+  xlab("Collection date") + ylab("TOC (mg/L)") +
+  theme(legend.position="none") + scale_colour_scico_d(name = 'Site ID', alpha = 1,
+                                                       begin = 0, end = 1, direction = 1,palette = "batlow") +
+  theme_bw() 
 
+sfig1_doc <- ggplot(data = doc, aes(x = as.Date(month_date), y = F14C, colour = Site.ID, shape= Group), size=3)+
+  geom_point()+
+  geom_line(data = doc, aes(x = as.Date(month_date), y = F14C, colour = Site.ID))+
+  xlab("Collection date") + ylab("DOC F14C") +
+  theme(legend.position="none") + scale_colour_scico_d(name = 'Site ID', alpha = 1,
+                                                       begin = 0, end = 1, direction = 1,palette = "batlow") +
+  theme_bw()  
 
-
-
-########### TOC vs F14C relationship ######
-
-# Merge TOC and F14C in one dataframe
-temp <- merge(toc, doc, by=c("month_date", "Site.ID"))
-
-# Calculate Spearman correlation for the whole dataset
-corr_global <- temp %>%
-  filter(grepl('Drip_GF|Drip_GR', Group.x)) %>%
-  summarise(
-    test = list(cor.test(Corrected.TOC.mg.L, F14C,
-                         method = "spearman",
-                         exact = FALSE))
-  ) %>%
-  mutate(
-    rho = test[[1]]$estimate,
-    p = test[[1]]$p.value
-  )
-
-label_text <- paste0( #label for plotting later
-  "\u03C1 = ", round(corr_global$rho, 2),
-  ", p = ", signif(corr_global$p, 2)
-)
-
-
-# TOC vs F14C by site
-
-fig4_corr_site <- temp %>% filter(grepl('Drip_GF|Drip_GR', Group.x)) %>%  
-                  ggplot(aes(x = Corrected.TOC.mg.L, y = F14C, colour = Site.ID))+
-             geom_point()+ #sample points
-             geom_smooth(aes(group = Site.ID), method = "lm", #regressions by site  
-                              se = FALSE,linewidth = 0.4, alpha = 0.3)+
-             geom_smooth(method = "lm", colour = "black", linewidth = 1.2,se = FALSE) +  #global regression         
-             annotate("text", x = 1.05, y = 0.25, label = label_text, colour = "black", hjust = 0) + #global Spearman correlation     
-             xlab("TOC (mg/L)") + ylab("F14C") + 
-             scale_colour_scico_d(name = 'Site', alpha = 1,begin = 0,
-                                  end = 1, direction = 1, palette = "batlow") +
-             theme_classic() 
-
-
-fig4_corr_time <- temp %>% filter(grepl('Drip_GF|Drip_GR', Group.x)) %>%
-                           mutate(month_date = as.Date(month_date)) %>% 
-                  ggplot(aes(x = Corrected.TOC.mg.L, y = F14C, colour = factor(month_date)))+
-             geom_point()+ #sample points
-             geom_smooth(aes(group = factor(month_date)), method = "lm", #regressions by month
-                              se = FALSE,linewidth = 0.4, alpha = 0.3)+
-             geom_smooth(method = "lm", colour = "black", linewidth = 1.2,se = FALSE) +  #global regression   
-             annotate("text", x = 1.05, y = 0.1, label = label_text, colour = "black", hjust = 0) + #global Spearman correlation     
-             xlab("TOC (mg/L)") + ylab("F14C") + ylim(0, 1.05)+
-             scale_colour_scico_d(name = 'Collection month', alpha = 1,begin = 0,
-                                  end = 1, direction = 1, palette = "batlow",
-                                  labels = function(x) format(as.Date(x), "%b %y")) +
-             theme_classic() 
-
-
-
+sfig1_dic <- ggplot(data = dic, aes(x = as.Date(month_date), y = F14C, colour = Site.ID, shape= Group), size=3)+
+  geom_point()+
+  geom_line(data = dic, aes(x = as.Date(month_date), y = F14C, colour = Site.ID))+
+  xlab("Collection date") + ylab("DIC F14C") +
+  theme(legend.position="none") + scale_colour_scico_d(name = 'Site ID', alpha = 1,
+                                                       begin = 0, end = 1, direction = 1,palette = "batlow") +
+  theme_bw()  
 
 # Arrange in one plot 
-ggpubr::ggarrange(fig4_corr_site, fig4_corr_time,  
-                  ncol=1, nrow = 2, heights = c(1,1), labels = c('A', 'B'),
-                  common.legend = FALSE, legend = "bottom", align = "v") 
-
-
+ggpubr::ggarrange(sfig1_toc, sfig1_doc, sfig1_dic,  
+                  ncol=1, nrow = 3, heights = c(1,1), widths = c(1,1), 
+                  common.legend = TRUE, legend = "bottom", align = "v") 
 
 # Save plot as png
-ggsave(filename = file.path("output","Fig4_TOC-F14C.pdf"), width = 15, height = 25, units = "cm")
+ggsave(filename = file.path("output","SupplFig1_C-timeseries.png"), width = 15, height = 20, units = "cm")
 
+#Calculate average for each drip
+drip_avg_doc14C <- doc %>% 
+  filter(F14C != 'is.na') %>% 
+  group_by(Site.ID) %>% 
+  summarise(avg = mean(F14C))
 
-# Calculate individual correlations to have as a table
-
-# Correlations per month
-corr_by_month_spearman <- temp %>%
-  filter(grepl('Drip_GF|Drip_GR', Group.x)) %>%
-  mutate(month_date = as.Date(month_date)) %>%
-  group_by(month_date) %>%
-  summarise(
-    test = list(cor.test(Corrected.TOC.mg.L, F14C,
-                         method = "spearman",
-                         exact = FALSE)),
-    n = sum(complete.cases(Corrected.TOC.mg.L, F14C))
-  ) %>%
-  mutate(
-    rho = sapply(test, \(x) x$estimate),
-    p_value = sapply(test, \(x) x$p.value)
-  ) %>%
-  select(-test)
-
-corr_by_month_spearman %>%
-  mutate(
-    month = format(month_date, "%b %y"),
-    rho = round(rho, 2),
-    p_value = signif(p_value, 2)
-  ) %>%
-  select(month, rho, p_value, n)
-
-
-# Correlations per site
-corr_by_site_spearman <- temp %>%
-  filter(grepl('Drip_GF|Drip_GR', Group.x)) %>%
-  group_by(Site.ID) %>%
-  summarise(
-    test = list(cor.test(Corrected.TOC.mg.L, F14C,
-                         method = "spearman",
-                         exact = FALSE))  ,
-    n = sum(complete.cases(Corrected.TOC.mg.L, F14C))
-  ) %>%
-  mutate(
-    rho = sapply(test, \(x) x$estimate),
-    p_value = sapply(test, \(x) x$p.value)
-  ) %>%
-  select(-test)
-
-corr_by_site_spearman %>%
-  mutate(
-    site = Site.ID,
-    rho = round(rho, 2),
-    p_value = signif(p_value, 2)
-  ) %>%
-  select(site, rho, p_value, n)
-
-
-########### Sinclair test ######
-# Sinclair test by site
-fig6_Sinclair_site <- sin %>% filter(grepl('Drip_GF|Drip_GR|RW', Group)) %>%  
-  ggplot(aes(x = ln.Mg.Ca., y = ln.Sr.Ca., colour = Site.ID))+
-  geom_point()+ #sample points
-  geom_smooth(aes(group = Site.ID), method = "lm", #regressions by site  
-              se = FALSE,linewidth = 0.4, alpha = 0.3)+
-  xlab("ln(Mg/Ca)") + ylab("ln(Sr/Ca)") + 
-  scale_colour_scico_d(name = 'Site', alpha = 1,begin = 0,
-                       end = 1, direction = 1, palette = "batlow") +
-  theme_classic() 
-
-# Save plot as png
-ggsave(filename = file.path("output","SupplFig4_Sinclair.pdf"), width = 15, height = 15, units = "cm")
-
-
-
-########### Supplementary figure 3 - Trace element concentrations over time and by site ######
+########### Supplementary figure 2 - Trace element concentrations over time and by site ######
 Mg <- ggplot(data = te %>% filter(Group != 'Soil') , aes(x = as.Date(month_date), y = as.double(Mg) , colour = Site.ID)) +
   geom_point() +
   geom_line(data = te %>% filter(Group != 'Soil'), aes(x = as.Date(month_date), y = as.double(Mg) , colour = Site.ID))+
@@ -457,10 +316,149 @@ ggpubr::ggarrange(Mg, Na, Al, Si, P, S, K, Ca, Zn, Sr, Ba, Fe,
                   common.legend = TRUE, legend = "bottom", align = "v") 
 
 # Save plot as png
-ggsave(filename = file.path("output","SupplFig3_TE-concentrations.png"), width = 25, height = 30, units = "cm")
+ggsave(filename = file.path("output","SupplFig2_TE-concentrations.png"), width = 25, height = 30, units = "cm")
 
 
-####### Figure Sr, Mg vs DO14C by site ########
+########### SCATTER PLOTS, SINCLAIR TEST ######
+
+########### Figure 4 - TOC vs F14C relationship ######
+
+# Merge TOC and F14C in one dataframe
+temp <- merge(toc, doc, by=c("month_date", "Site.ID"))
+
+# Calculate Spearman correlation for the whole dataset
+corr_global <- temp %>%
+  filter(grepl('Drip_GF|Drip_GR', Group.x)) %>%
+  summarise(
+    test = list(cor.test(Corrected.TOC.mg.L, F14C,
+                         method = "spearman",
+                         exact = FALSE))
+  ) %>%
+  mutate(
+    rho = test[[1]]$estimate,
+    p = test[[1]]$p.value
+  )
+
+label_text <- paste0( #label for plotting later
+  "\u03C1 = ", round(corr_global$rho, 2),
+  ", p = ", signif(corr_global$p, 2)
+)
+
+
+# TOC vs F14C by site
+
+fig4_corr_site <- temp %>% filter(grepl('Drip_GF|Drip_GR', Group.x)) %>%  
+  ggplot(aes(x = Corrected.TOC.mg.L, y = F14C, colour = Site.ID))+
+  geom_point()+ #sample points
+  geom_smooth(aes(group = Site.ID), method = "lm", #regressions by site  
+              se = FALSE,linewidth = 0.4, alpha = 0.3)+
+  geom_smooth(method = "lm", colour = "black", linewidth = 1.2,se = FALSE) +  #global regression         
+  annotate("text", x = 1.05, y = 0.25, label = label_text, colour = "black", hjust = 0) + #global Spearman correlation     
+  xlab("TOC (mg/L)") + ylab("F14C") + 
+  scale_colour_scico_d(name = 'Site', alpha = 1,begin = 0,
+                       end = 1, direction = 1, palette = "batlow") +
+  theme_classic() 
+
+
+fig4_corr_time <- temp %>% filter(grepl('Drip_GF|Drip_GR', Group.x)) %>%
+  mutate(month_date = as.Date(month_date)) %>% 
+  ggplot(aes(x = Corrected.TOC.mg.L, y = F14C, colour = factor(month_date)))+
+  geom_point()+ #sample points
+  geom_smooth(aes(group = factor(month_date)), method = "lm", #regressions by month
+              se = FALSE,linewidth = 0.4, alpha = 0.3)+
+  geom_smooth(method = "lm", colour = "black", linewidth = 1.2,se = FALSE) +  #global regression   
+  annotate("text", x = 1.05, y = 0.1, label = label_text, colour = "black", hjust = 0) + #global Spearman correlation     
+  xlab("TOC (mg/L)") + ylab("F14C") + ylim(0, 1.05)+
+  scale_colour_scico_d(name = 'Collection month', alpha = 1,begin = 0,
+                       end = 1, direction = 1, palette = "batlow",
+                       labels = function(x) format(as.Date(x), "%b %y")) +
+  theme_classic() 
+
+
+
+
+# Arrange in one plot 
+ggpubr::ggarrange(fig4_corr_site, fig4_corr_time,  
+                  ncol=1, nrow = 2, heights = c(1,1), labels = c('A', 'B'),
+                  common.legend = FALSE, legend = "bottom", align = "v") 
+
+
+
+# Save plot as png
+ggsave(filename = file.path("output","Fig4_TOC-F14C.pdf"), width = 15, height = 25, units = "cm")
+
+
+########### Supplementary Fig. 3: Sinclair Test ###########
+# Calculate individual correlations to have as a table
+
+# Correlations per month
+corr_by_month_spearman <- temp %>%
+  filter(grepl('Drip_GF|Drip_GR', Group.x)) %>%
+  mutate(month_date = as.Date(month_date)) %>%
+  group_by(month_date) %>%
+  summarise(
+    test = list(cor.test(Corrected.TOC.mg.L, F14C,
+                         method = "spearman",
+                         exact = FALSE)),
+    n = sum(complete.cases(Corrected.TOC.mg.L, F14C))
+  ) %>%
+  mutate(
+    rho = sapply(test, \(x) x$estimate),
+    p_value = sapply(test, \(x) x$p.value)
+  ) %>%
+  select(-test)
+
+corr_by_month_spearman %>%
+  mutate(
+    month = format(month_date, "%b %y"),
+    rho = round(rho, 2),
+    p_value = signif(p_value, 2)
+  ) %>%
+  select(month, rho, p_value, n)
+
+
+# Correlations per site
+corr_by_site_spearman <- temp %>%
+  filter(grepl('Drip_GF|Drip_GR', Group.x)) %>%
+  group_by(Site.ID) %>%
+  summarise(
+    test = list(cor.test(Corrected.TOC.mg.L, F14C,
+                         method = "spearman",
+                         exact = FALSE))  ,
+    n = sum(complete.cases(Corrected.TOC.mg.L, F14C))
+  ) %>%
+  mutate(
+    rho = sapply(test, \(x) x$estimate),
+    p_value = sapply(test, \(x) x$p.value)
+  ) %>%
+  select(-test)
+
+corr_by_site_spearman %>%
+  mutate(
+    site = Site.ID,
+    rho = round(rho, 2),
+    p_value = signif(p_value, 2)
+  ) %>%
+  select(site, rho, p_value, n)
+
+
+########### Sinclair test ######
+# Sinclair test by site
+fig6_Sinclair_site <- sin %>% filter(grepl('Drip_GF|Drip_GR|RW', Group)) %>%  
+  ggplot(aes(x = ln.Mg.Ca., y = ln.Sr.Ca., colour = Site.ID))+
+  geom_point()+ #sample points
+  geom_smooth(aes(group = Site.ID), method = "lm", #regressions by site  
+              se = FALSE,linewidth = 0.4, alpha = 0.3)+
+  xlab("ln(Mg/Ca)") + ylab("ln(Sr/Ca)") + 
+  scale_colour_scico_d(name = 'Site', alpha = 1,begin = 0,
+                       end = 1, direction = 1, palette = "batlow") +
+  theme_classic() 
+
+# Save plot as png
+ggsave(filename = file.path("output","SupplFig3_Sinclair.pdf"), width = 15, height = 15, units = "cm")
+
+
+####### Supplementary figure 4 - Figure Sr, Mg vs DO14C by site ########
 
 # Merge TE and DOC data by collection date
 d <- merge(doc, te, by=c("month_date", "Sample.Name"))
@@ -506,6 +504,6 @@ Sr_doc <- ggplot(d, aes(x = as.double(Sr), y = F14C)) +
 Sr_doc 
 
 # Save plot as png
-ggsave(filename = file.path("output","SupplFig5_Sr-DOC.pdf"), width = 20, height = 20, units = "cm")
+ggsave(filename = file.path("output","SupplFig4_Sr-DOC.pdf"), width = 20, height = 20, units = "cm")
 
 
